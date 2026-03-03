@@ -44,8 +44,8 @@ function createExpressApp(){
 function start_HTTPS_Server(){
     server=https.createServer(
         {
-            key: fs.readFileSync(path.join(__dirname, "cert", "server.key")),
-            cert: fs.readFileSync(path.join(__dirname, "cert", "server.crt"))
+            key: fs.readFileSync(path.join(__dirname, "cert", "localhost+2-key.pem")),
+            cert: fs.readFileSync(path.join(__dirname, "cert", "localhost+2.pem"))
         },
         app
     )
