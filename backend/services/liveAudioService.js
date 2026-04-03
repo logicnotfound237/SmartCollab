@@ -3,7 +3,7 @@ const path = require('path');
 const { v4: uuidv4 } = require('uuid');
 const TranscriptionQueue = require('./transcription/transcriptionQueue.js');
 const WAVWriter = require('./audio/WAVWriter.js');
-const { addSegment, getRoomTranscript, getRoomTranscriptText, clearRoom, getSegmentCount, getAllRooms } = require('./transcriptStore');
+const { addSegment, getRoomTranscript, getRoomTranscriptText, clearRoom, getSegmentCount, getAllRooms, saveRoomTranscriptToFile } = require('./transcriptStore');
 
 class LiveAudioService {
   constructor(options = {}) {
@@ -352,16 +352,21 @@ class LiveAudioService {
    * Handle transcription result and emit updates
    */
   _handleTranscriptionResult(result, roomId, userId, bufferStartTime, emitCallback) {
-    if (!result.success || !result.transcript) {
+    // WhisperRunner returns result.transcript with { segments: [...], text: "..." }
+    if (!result.success || !result.transcript || !result.transcript.segments || result.transcript.segments.length === 0) {
       console.warn(`[LiveAudioService] Transcription unsuccessful for user ${userId}`);
       return;
     }
 
     try {
+      // WhisperRunner normalizes segments to: { start, end, text }
+      const segments = result.transcript.segments;
+      const fullText = segments.map(seg => seg.text).join(' ').trim();
+
       // Create segment from transcription result
       const segment = {
         userId: userId,
-        text: result.transcript,
+        text: fullText,
         start: bufferStartTime,
         end: bufferStartTime + (result.duration || 0)
       };
@@ -371,8 +376,11 @@ class LiveAudioService {
 
       // Only log full transcript if segment was successfully added
       if (added) {
-        const fullText = getRoomTranscriptText(roomId);
-        console.log(`\n[ROOM ${roomId} TRANSCRIPT]:\n${fullText}\n`);
+        const transcriptText = getRoomTranscriptText(roomId);
+        console.log(`\n[ROOM ${roomId} TRANSCRIPT]:\n${transcriptText}\n`);
+        
+        // Save transcript to JSON file after each segment
+        saveRoomTranscriptToFile(roomId);
       }
     } catch (error) {
       console.error('[LiveAudioService] Error handling transcription result:', error.message);
@@ -462,8 +470,11 @@ class LiveAudioService {
         console.log(`[LiveAudioService] Cleaned up room ${roomId} buffers`);
       }
       
+      // Save transcript to JSON file before clearing
+      const saved = saveRoomTranscriptToFile(roomId);
+      
       // Clear transcript for room
-      transcriptStore.clearRoom(roomId);
+      clearRoom(roomId);
     } catch (error) {
       console.error('[LiveAudioService] Error handling room ended:', error.message);
     }
@@ -474,6 +485,16 @@ class LiveAudioService {
    */
   getRoomTranscript(roomId) {
     return transcriptStore.getRoomTranscript(roomId);
+  }
+
+  /**
+   * Save room transcript to JSON file
+   * @param {string} roomId - Room identifier
+   * @param {string} outputDir - Optional custom output directory
+   * @returns {object|null} - Saved file info or null
+   */
+  saveTranscriptToFile(roomId, outputDir) {
+    return saveRoomTranscriptToFile(roomId, outputDir);
   }
 
   /**
