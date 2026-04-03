@@ -3,6 +3,7 @@ const path = require('path');
 const { v4: uuidv4 } = require('uuid');
 const TranscriptionQueue = require('./transcription/transcriptionQueue.js');
 const WAVWriter = require('./audio/WAVWriter.js');
+const { addSegment, getRoomTranscript, getRoomTranscriptText, clearRoom, getSegmentCount, getAllRooms } = require('./transcriptStore');
 
 class LiveAudioService {
   constructor(options = {}) {
@@ -21,9 +22,6 @@ class LiveAudioService {
     //   activeWhisperProcess: ChildProcess | null
     // } } }
     this.audioBuffers = new Map();
-    
-    // Track transcript timeline per room
-    this.roomTranscripts = new Map();
     
     // Cleanup interval for stale buffers
     this.cleanupInterval = setInterval(() => this._cleanupStaleBuffers(), 30000);
@@ -360,41 +358,22 @@ class LiveAudioService {
     }
 
     try {
-      // Initialize room transcript if needed
-      if (!this.roomTranscripts.has(roomId)) {
-        this.roomTranscripts.set(roomId, []);
+      // Create segment from transcription result
+      const segment = {
+        userId: userId,
+        text: result.transcript,
+        start: bufferStartTime,
+        end: bufferStartTime + (result.duration || 0)
+      };
+
+      // Add segment to transcript store (validates, deduplicates, ignores empty)
+      const added = addSegment(roomId, segment);
+
+      // Only log full transcript if segment was successfully added
+      if (added) {
+        const fullText = getRoomTranscriptText(roomId);
+        console.log(`\n[ROOM ${roomId} TRANSCRIPT]:\n${fullText}\n`);
       }
-      
-      const roomTranscript = this.roomTranscripts.get(roomId);
-      const segments = result.transcript.segments || [];
-      
-      console.log(`[LiveAudioService] Received ${segments.length} transcript segments for user ${userId}`);
-      
-      // Process each segment
-      segments.forEach(segment => {
-        const transcriptEntry = {
-          userId,
-          start: bufferStartTime / 1000 + (segment.start || 0),
-          end: bufferStartTime / 1000 + (segment.end || 0),
-          text: segment.text.trim(),
-          timestamp: Date.now()
-        };
-        
-        // Add to room transcript
-        roomTranscript.push(transcriptEntry);
-        
-        // Emit to room via callback
-        if (emitCallback && typeof emitCallback === 'function') {
-          emitCallback(roomId, {
-            userId,
-            start: transcriptEntry.start,
-            end: transcriptEntry.end,
-            text: transcriptEntry.text
-          });
-        }
-        
-        console.log(`[LiveAudioService] Transcript [${roomId}][${userId}]: "${transcriptEntry.text}" (${transcriptEntry.start.toFixed(2)}s - ${transcriptEntry.end.toFixed(2)}s)`);
-      });
     } catch (error) {
       console.error('[LiveAudioService] Error handling transcription result:', error.message);
     }
@@ -484,19 +463,17 @@ class LiveAudioService {
       }
       
       // Clear transcript for room
-      if (this.roomTranscripts.has(roomId)) {
-        this.roomTranscripts.delete(roomId);
-      }
+      transcriptStore.clearRoom(roomId);
     } catch (error) {
       console.error('[LiveAudioService] Error handling room ended:', error.message);
     }
   }
 
   /**
-   * Get transcript timeline for a room
+   * Get transcript timeline for a room (sorted chronologically)
    */
   getRoomTranscript(roomId) {
-    return this.roomTranscripts.get(roomId) || [];
+    return transcriptStore.getRoomTranscript(roomId);
   }
 
   /**
@@ -521,9 +498,9 @@ class LiveAudioService {
       totalBufferedChunks,
       activeTranscriptions,
       transcriptionQueue: this.transcriptionQueue.getQueueStats(),
-      roomTranscripts: Array.from(this.roomTranscripts.keys()).map(roomId => ({
+      roomTranscripts: transcriptStore.getAllRooms().map(roomId => ({
         roomId,
-        segmentCount: this.roomTranscripts.get(roomId).length
+        segmentCount: transcriptStore.getSegmentCount(roomId)
       }))
     };
   }
@@ -588,7 +565,6 @@ class LiveAudioService {
     
     // Clear all buffers
     this.audioBuffers.clear();
-    this.roomTranscripts.clear();
     
     console.log('[LiveAudioService] Shutdown complete');
   }
