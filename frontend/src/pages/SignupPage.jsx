@@ -8,10 +8,10 @@ import { useAuth } from '../context/AuthContext';
 import { Eye, EyeOff, Mail, Lock, User, ArrowRight } from 'lucide-react';
 
 const SignupPage = () => {
-  const { signup, user } = useAuth()
+  const { signup, user, LandingPageEmail } = useAuth()
   const [formData, setFormData] = useState({
     name: '',
-    email: '',
+    email: LandingPageEmail?LandingPageEmail:'',
     password: '',
     confirmPassword: ''
   })

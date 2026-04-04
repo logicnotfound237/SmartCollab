@@ -17,6 +17,7 @@ axios.defaults.baseURL = 'http://localhost:5000'
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null)
+  const [LandingPageEmail, setLandingPageEmail]=useState(null)
   const [loading, setLoading] = useState(true)
   const [token, setToken] = useState(localStorage.getItem('token'))
 
@@ -99,7 +100,9 @@ export const AuthProvider = ({ children }) => {
     login,
     signup,
     logout,
-    loading
+    loading,
+    setLandingPageEmail,
+    LandingPageEmail
   }
 
   return (
