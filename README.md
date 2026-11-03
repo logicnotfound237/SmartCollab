@@ -1,3 +1,4 @@
+# NOTE:- This is the abandoned first iteration of this project. The working version of this project can be found [Here](https://github.com/KrishnaSonawane8008/SmartCollab).
 # SmartCollab - AI-Powered Collaboration Platform
 
 A complete, working prototype of **SmartCollab**, an AI-powered collaboration platform inspired by Zoom's UI and Microsoft Teams' functionality. Built with React, Node.js, and modern web technologies.
